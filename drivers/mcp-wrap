@@ -1,0 +1,72 @@
+#!/bin/bash
+# mcp-wrap — generic stderr-capturing wrapper for stdio MCP servers
+#
+# Purpose (Orbit 2026-06-01, experiment to ground-truth Claude Code's "silent
+# MCP no-spawn" defect — issue anthropics/claude-code#64541): redirect the
+# child binary's stderr to a per-(name, agent, timestamp) file so we can tell:
+#   1. file empty after a "MCP missing" incident → child never started, Claude
+#      Code's child-process management is at fault.
+#   2. file has crash trace → the MCP binary itself crashed at startup and we
+#      should fix our own code.
+#
+# Usage in mcp-registry/registry.yaml:
+#   <server>:
+#     command: "/Users/fleet/bin/mcp-wrap"
+#     args:    ["<real-binary>", "<real-arg1>", "..."]
+#     env:
+#       MCP_WRAP_NAME: "<friendly-name>"     # used in the log filename
+#       <other env passed through to the child>
+#
+# The wrapper preserves the child's stdin/stdout (the MCP JSON-RPC channel) and
+# replaces itself with `exec` so there's no extra process layer at runtime
+# beyond the brief shell startup. Child env is inherited intact.
+#
+# Rollback: restore the previous registry.yaml entry (backup is
+# ~/.config/mcp-registry/registry.yaml.bak.20260601-pre-mcp-wrap), restart the
+# dispatcher's stale-redispatch (regenerates .mcp.json on each spawn). No
+# changes to binaries, keys, or workspaces.
+
+set -e
+
+LOG_DIR="$HOME/logs/mcp"
+mkdir -p "$LOG_DIR"
+
+NAME="${MCP_WRAP_NAME:-mcp}"
+# Agent identity from the workspace path. Most agents live under ClaudeCowork/<name>;
+# some dev agents (e.g. Ember) run from DevProjects/<repo>. Fall back to the PWD
+# basename so the token is always distinct & human-readable (never blank).
+AGENT=$(echo "$PWD" | sed -nE 's#.*/(ClaudeCowork|DevProjects)/([^/]+).*#\2#p')
+AGENT="${AGENT:-$(basename "$PWD")}"
+AGENT="${AGENT:-unknown}"
+TS=$(date -u +%Y%m%dT%H%M%SZ)
+ERR="$LOG_DIR/${NAME}.${AGENT}.${TS}.err"
+
+# Header line so even an empty-child run leaves evidence the wrapper itself ran.
+printf '[mcp-wrap] %s start name=%s agent=%s pid=%s cmd=%q\n' "$TS" "$NAME" "$AGENT" "$$" "$*" >>"$ERR"
+
+# B4.3/B4.4 secrets-indirection (task 6b1fab26, 2026-06-07):
+# Source shared secrets (RELAY_PASSWORD, DATAFORSEO_PASSWORD, etc.) from keys.env
+# then per-agent secrets (MESH_AGENT_KEY) from <agent>.env.
+# Secrets are exported into the child's env via inheritance, not via .mcp.json plaintext.
+# Fail-safe: missing file → skip silently (never abort — a missing file must not
+# prevent the MCP server from starting for other reasons).
+AGENT_LOWER=$(echo "$AGENT" | tr '[:upper:]' '[:lower:]')
+KEYS_ENV="$HOME/.config/agents/keys.env"
+AGENT_ENV="$HOME/.config/agents/${AGENT_LOWER}.env"
+
+if [ -f "$KEYS_ENV" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$KEYS_ENV" 2>>"$ERR" || true
+    set +a
+fi
+if [ -f "$AGENT_ENV" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$AGENT_ENV" 2>>"$ERR" || true
+    set +a
+fi
+
+# Replace the shell with the child binary. Child stderr → file, stdin/stdout
+# stay connected to Claude Code so the MCP JSON-RPC handshake is untouched.
+exec "$@" 2>>"$ERR"

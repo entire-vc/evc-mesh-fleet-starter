@@ -1,0 +1,19 @@
+# NEVER commit real secrets or state
+keys.env
+*.key
+*.pem
+.env
+.env.*
+!.env.example
+secrets/
+
+# Rendered per-agent MCP config (contains resolved keys)
+**/.mcp.json
+
+# Runtime state / logs
+.fiddler/
+.dispatcher/
+*.log
+__pycache__/
+*.py[cod]
+.DS_Store

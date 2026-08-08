@@ -1,0 +1,30 @@
+# MCP registry — the single source of truth for every agent's .mcp.json.
+# `mcp_registry.py` renders <workspace>/.mcp.json for each agent from this file
+# before every spawn. Secrets are referenced as ${VAR} and resolved from
+# ~/.config/agents/keys.env. `agents: ['*']` = all agents; or list slugs.
+#
+# Copy to ~/.config/mcp-registry/registry.yaml and edit.
+version: 1
+mcps:
+  # The Mesh MCP itself — how agents read/write tasks and memory.
+  mesh:
+    command: /Users/fleet/bin/mcp-wrap          # stderr-capturing wrapper (drivers/mcp-wrap)
+    args:
+      - /Users/fleet/bin/mesh-mcp                # the Mesh MCP binary (from your Mesh build)
+      - --transport
+      - stdio
+    env:
+      MCP_WRAP_NAME: mesh-mcp
+      MESH_API_URL: https://mesh.example.com
+      MESH_AGENT_KEY: ${MESH_AGENT_KEY}
+      # MESH_BASIC_AUTH: user:pass               # only if your Mesh is behind an HTTP basic-auth proxy
+    agents: ['*']
+
+  # Example of a second, agent-scoped MCP server (only some agents get it).
+  # analytics:
+  #   command: /Users/fleet/bin/mcp-wrap
+  #   args: [/Users/fleet/.local/bin/some-mcp]
+  #   env:
+  #     MCP_WRAP_NAME: analytics
+  #     SOME_API_KEY: ${SOME_API_KEY}
+  #   agents: [nova, atlas]

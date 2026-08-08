@@ -1,0 +1,49 @@
+{
+  "//": "fiddler config — the FEEDER driver. Copy to ~/.config/fiddler/fiddler.json and edit.",
+  "//mesh_api_url": "Your Mesh instance base URL.",
+  "mesh_api_url": "https://mesh.example.com",
+
+  "//basic_auth": "Optional 'user:pass' if your Mesh sits behind an HTTP basic-auth reverse proxy. Rides the Authorization header; the app auth uses X-Agent-Key, so they never collide. Null = none.",
+  "basic_auth": null,
+
+  "poll_interval_sec": 15,
+  "nudge_after_sec": 1200,
+  "task_timeout_sec": 2400,
+  "debounce_sec": 120,
+  "rescue_after_sec": 600,
+  "default_model": "claude-sonnet-5",
+
+  "//alerts": "Where the driver escalates a stuck/reauth lane. Null outbox = log-only.",
+  "alert_outbox": null,
+  "alert_chat_id": null,
+  "escalate_enabled": true,
+  "escalate_email_to": "operator@example.com",
+
+  "//agents": "One entry per feeder lane. mesh_agent_key comes from your Mesh (per-agent). workspace = that agent's Claude Code cwd (holds its CLAUDE.md + .mcp.json). tmux_session = the persistent TUI session name.",
+  "agents": [
+    {
+      "name": "Nova",
+      "tmux_session": "nova",
+      "mesh_agent_key": "agk_REPLACE_WITH_YOUR_AGENT_KEY",
+      "workspace": "/Users/fleet/ClaudeCowork/nova",
+      "enabled": true,
+      "reauth_recovery": { "spawn_cmd": "/Users/fleet/bin/fiddler-lane-respawn.sh nova sonnet" }
+    },
+    {
+      "name": "Kilo",
+      "tmux_session": "kilo",
+      "mesh_agent_key": "agk_REPLACE_WITH_YOUR_AGENT_KEY",
+      "workspace": "/Users/fleet/ClaudeCowork/kilo",
+      "enabled": true,
+      "reauth_recovery": { "spawn_cmd": "/Users/fleet/bin/fiddler-lane-respawn.sh kilo sonnet" }
+    },
+    {
+      "name": "Pixel",
+      "tmux_session": "pixel",
+      "mesh_agent_key": "agk_REPLACE_WITH_YOUR_AGENT_KEY",
+      "workspace": "/Users/fleet/ClaudeCowork/pixel",
+      "enabled": true,
+      "reauth_recovery": { "spawn_cmd": "/Users/fleet/bin/fiddler-lane-respawn.sh pixel sonnet" }
+    }
+  ]
+}

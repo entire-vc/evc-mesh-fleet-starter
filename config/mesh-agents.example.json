@@ -1,0 +1,16 @@
+{
+  "//": "mesh-dispatcher config — the SSE driver. Copy to ~/bin/mesh-agents.json.",
+  "//mesh_api_url": "Your Mesh instance base URL.",
+  "mesh_api_url": "https://mesh.example.com",
+  "//agents": "Agents on the DISPATCHER path (spawned per-task by SSE, model chosen at spawn). Typically your coordinator/orchestrator. env_file = per-agent GitHub identity + secrets injected at spawn.",
+  "agents": [
+    {
+      "name": "Atlas",
+      "agent_key": "agk_REPLACE_WITH_YOUR_AGENT_KEY",
+      "workspace": "/Users/fleet/ClaudeCowork/atlas",
+      "model": "sonnet",
+      "env_file": "/Users/fleet/.config/agents/your-github-bot.env",
+      "workflows": true
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- The SSE dispatcher daemon (optional — only if you use the dispatcher path). -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.example.dispatcher</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/fleet/mesh-fleet-starter/drivers/mesh-dispatcher.py</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>TMUX_BIN</key><string>/opt/homebrew/bin/tmux</string>
+    <key>PATH</key><string>/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardOutPath</key><string>/Users/fleet/.dispatcher/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>/Users/fleet/.dispatcher/logs/launchd.err.log</string>
+</dict>
+</plist>
