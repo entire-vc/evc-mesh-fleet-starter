@@ -5,6 +5,8 @@ import json
 import re
 import subprocess
 import threading
+import base64
+import urllib.parse
 import urllib.request
 import urllib.error
 import time
@@ -605,6 +607,51 @@ _AUTH_FAIL_PAUSED: bool = False        # set True once auth-expiry auto-pause tr
 _REAP_AGENTS_TO_PULL: set = set()      # agents whose slots freed (process in reaper after lock)
 _AGENTS_BY_NAME: dict = {}             # name -> agent_cfg, populated in main()
 _API_URL: str = ""                     # populated in main()
+
+# --- HTTP basic-auth на реверс-прокси (self-host за гейтом) ------------------- #
+# Инстанс Mesh может стоять за прокси с паролем: гейт занимает заголовок
+# Authorization, авторизация приложения идёт своим X-Agent-Key, поэтому они не
+# конфликтуют и нужны ОБА одновременно.
+#
+# Ставится одним обработчиком на опенере, а не в 38 местах постановки заголовков:
+# весь HTTP здесь идёт через urllib, это настоящая узкая точка, и она покрывает
+# в том числе пути, которые появятся позже. Ровно этот урок уже выучен фиддлером
+# ("один applyAuth, а не N").
+_BASIC_AUTH_HEADER: str | None = None
+_BASIC_AUTH_HOST: str | None = None
+
+
+class _MeshBasicAuth(urllib.request.BaseHandler):
+    """Добавляет Basic ТОЛЬКО запросам к хосту Mesh.
+
+    Привязка к хосту обязательна: опенер глобальный и видит все запросы
+    процесса, а креденшл гейта не должен уходить никуда, кроме своего инстанса.
+    Уже проставленный Authorization не трогаем — вызывающий знал, что делал.
+    """
+
+    def http_request(self, req):
+        if (_BASIC_AUTH_HEADER and _BASIC_AUTH_HOST
+                and req.host.split(":")[0] == _BASIC_AUTH_HOST
+                and not req.has_header("Authorization")):
+            req.add_unredirected_header("Authorization", _BASIC_AUTH_HEADER)
+        return req
+
+    https_request = http_request
+
+
+def _set_basic_auth(api_url: str, basic: str | None) -> None:
+    """Включить гейт для указанного инстанса. Пусто или без двоеточия = выключено
+    (пустой пароль не отправляем никогда)."""
+    global _BASIC_AUTH_HEADER, _BASIC_AUTH_HOST
+    ba = (basic or "").strip()
+    if not ba or ":" not in ba:
+        _BASIC_AUTH_HEADER = _BASIC_AUTH_HOST = None
+        return
+    _BASIC_AUTH_HEADER = "Basic " + base64.b64encode(ba.encode()).decode()
+    _BASIC_AUTH_HOST = urllib.parse.urlparse(api_url).hostname
+    urllib.request.install_opener(
+        urllib.request.build_opener(_MeshBasicAuth()))
+
                                        # cleared on successful spawn
 
 # --- review_arbiter (shared cross-engine review state) ---------------------
@@ -6823,6 +6870,10 @@ def main():
     # Populate registries for pull-on-reap helper (added 2026-05-22)
     global _API_URL
     _API_URL = api_url
+    # Гейт читается из того же конфига; без ключа поведение прежнее.
+    _set_basic_auth(api_url, config.get("basic_auth"))
+    if _BASIC_AUTH_HEADER:
+        log("main", f"reverse-proxy basic-auth enabled for {_BASIC_AUTH_HOST}")
     for a in agents:
         _AGENTS_BY_NAME[a["name"]] = a
 

@@ -17,7 +17,8 @@ mcps:
       MCP_WRAP_NAME: mesh-mcp
       MESH_API_URL: https://mesh.example.com
       MESH_AGENT_KEY: ${MESH_AGENT_KEY}
-      # MESH_BASIC_AUTH: user:pass               # only if your Mesh is behind an HTTP basic-auth proxy
+      # MESH_BASIC_AUTH: ${MESH_BASIC_AUTH}      # only if your Mesh is behind an HTTP basic-auth proxy
+                                                 # (put the real user:pass in keys.env, not here)
     agents: ['*']
 
   # Example of a second, agent-scoped MCP server (only some agents get it).

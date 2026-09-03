@@ -2,6 +2,8 @@
   "//": "mesh-dispatcher config — the SSE driver. Copy to ~/bin/mesh-agents.json.",
   "//mesh_api_url": "Your Mesh instance base URL.",
   "mesh_api_url": "https://mesh.example.com",
+  "//basic_auth": "Optional 'user:pass' if your Mesh sits behind an HTTP basic-auth reverse proxy. Sent only to the mesh_api_url host; the app auth uses X-Agent-Key, so they never collide. Null = none.",
+  "basic_auth": null,
   "//agents": "Agents on the DISPATCHER path (spawned per-task by SSE, model chosen at spawn). Typically your coordinator/orchestrator. env_file = per-agent GitHub identity + secrets injected at spawn.",
   "agents": [
     {

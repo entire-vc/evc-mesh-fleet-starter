@@ -48,8 +48,15 @@ cp config/keys.env.example ~/.config/agents/keys.env && chmod 600 ~/.config/agen
 
 Edit `registry.yaml`: set `MESH_API_URL` to your instance and point `args` at your
 `mesh-mcp` binary. If your Mesh sits behind an HTTP basic-auth reverse proxy, add
-`MESH_BASIC_AUTH: user:pass` to the env (it rides the `Authorization` header; the app
-auth uses `X-Agent-Key`, so they don't collide).
+`MESH_BASIC_AUTH: ${MESH_BASIC_AUTH}` to the env and put the real `user:pass` in
+`keys.env` (it rides the `Authorization` header; the app auth uses `X-Agent-Key`, so
+they don't collide).
+
+A gated instance has to be declared in **all three** places, because each one talks to
+Mesh on its own: `MESH_BASIC_AUTH` in the registry (for the MCP server), `basic_auth`
+in `fiddler.json` (feeder), and `basic_auth` in `mesh-agents.json` (dispatcher). Miss
+one and that component alone answers 401, which reads as a broken agent rather than as
+a missing credential.
 
 Render each agent's `.mcp.json` from the registry (or write `.mcp.json` by hand):
 
@@ -136,4 +143,5 @@ before relying on it.
 - **Agent never picks up a task** → is it assigned to *that* agent and in `todo`? `fiddler.py status` shows what the feeder sees.
 - **Session stuck on `/login`** → `fiddler-lane-respawn.sh <slug>` re-spawns it; make sure Claude Code is logged in for that user.
 - **MCP tools missing in a session** → check the agent's `.mcp.json` and that `mesh-mcp` authenticates (run it by hand with the agent's `MESH_AGENT_KEY` set; it should print "Authenticated as agent: …").
-- **Mesh behind basic-auth returns 401** → set `MESH_BASIC_AUTH` (registry) and `basic_auth` (fiddler.json).
+- **Mesh behind basic-auth returns 401** → the credential is declared per component: `MESH_BASIC_AUTH` (registry, for the MCP server), `basic_auth` (`fiddler.json`, feeder), `basic_auth` (`mesh-agents.json`, dispatcher). If only one component 401s, that is the one still missing it.
+- **Only the dispatcher 401s** → versions before this note had no basic-auth support in `mesh-dispatcher.py` at all; the feeder worked and the dispatcher did not. Update the driver.
