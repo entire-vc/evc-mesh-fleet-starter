@@ -1,6 +1,6 @@
 # Task Workflow — Common Rules for All Mesh Agents
 
-**Shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All Mesh-task, state-awareness, and the operator-communication rules live here; role-specifics go in your own CLAUDE.md but these take PRIORITY. Maintained by Orbit in `/Users/fleet/ClaudeCowork/bob/CLAUDE-task-workflow.md` (symlinked + `@`-imported into every agent workspace).
+**Shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All Mesh-task, state-awareness, and the operator-communication rules live here; role-specifics go in your own CLAUDE.md but these take PRIORITY. Maintained by Orbit in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md` (symlinked + `@`-imported into every agent workspace).
 
 > Full incident write-ups, worked examples, and enforcement-script internals for every rule → `CLAUDE-workflow-reference.md` (read on demand). This core carries the operative directives.
 
@@ -77,7 +77,7 @@ Applies to ALL DB-backed services. Per-service CI `migrate`-before-`deploy` gate
 
 Why this replaced the bare command: `hold` was documented in §1q as *the* machine-readable way to say "do not merge yet", but it only ever stopped the train. The manual path — the one this section told everyone to use — read no labels at all. On 2026-07-29 two security PRs (`#428`, `#432`) reached prod carrying `hold`, one of them **7 minutes** after the label went on. A label that guards one of two merge paths is worse than none, because it gets believed and then stops being watched.
 
-Deliberate override exists and is loud: `~/bin/gh-merge <n> <repo> --force-hold "<reason>"` prints the reason and proceeds. `--check-only` runs the gate without merging. `~/bin/gh-merge` is a **symlink** to `bob/scripts/fleet-tools/gh-merge`, so the prod copy and the tracked copy cannot drift (the failure mode that left the June merge-train gate dead in prod while the repo showed it fixed).
+Deliberate override exists and is loud: `~/bin/gh-merge <n> <repo> --force-hold "<reason>"` prints the reason and proceeds. `--check-only` runs the gate without merging. `~/bin/gh-merge` is a **symlink** to `<ops-repo>/scripts/fleet-tools/gh-merge`, so the prod copy and the tracked copy cannot drift (the failure mode that left the June merge-train gate dead in prod while the repo showed it fixed).
 
 Before a **batch** merge, apply §1b ordering: inspect each PR for migrations and merge in version order; **two open PRs must never carry the same migration version** (collision → migrate-gate skips one or fails closed) — renumber before merging, and never merge a lower version *after* a higher one already landed. Verified working (Atlas, Spark unjam; Orbit `#23582ede`).
 
@@ -184,9 +184,9 @@ Fact **not in `servers.md`, or contradicts it** → do **not** guess. Either (a)
 
 ### 1d-bis. A decommissioned host does not go quiet — it LIES (added 2026-07-12, Mesh `e69e21cb`)
 
-**Spark:** verify **only** via the live API `https://app.example.com/api/v1/...`, or — when SQL is genuinely required — `source ~/.config/agents/vega-prod.env && ssh "$SPARK_DB_HOST" "docker exec $SPARK_DB_CONTAINER psql -U $SPARK_DB_USER -d $SPARK_DB_NAME …"` (`$SPARK_DB_USER` = read-only `spark_read`, DB-enforced — INSERT/UPDATE/DELETE/DDL fail by design). **NEVER `tw-billing`. NEVER hardcode `-U spark`** — that's the DB superuser; a copy-pasted `-U spark` example is one keystroke from an unaudited prod write (task #27a07d6b).
+**Spark:** verify **only** via the live API `https://app.example.com/api/v1/...`, or — when SQL is genuinely required — `source ~/.config/agents/vega-prod.env && ssh "$SPARK_DB_HOST" "docker exec $SPARK_DB_CONTAINER psql -U $SPARK_DB_USER -d $SPARK_DB_NAME …"` (`$SPARK_DB_USER` = read-only `spark_read`, DB-enforced — INSERT/UPDATE/DELETE/DDL fail by design). **NEVER `host-a`. NEVER hardcode `-U spark`** — that's the DB superuser; a copy-pasted `-U spark` example is one keystroke from an unaudited prod write (task #27a07d6b).
 
-The failure this rule exists to prevent: after the Helsinki cutover (2026-07-09) the old `spark-postgres` on `tw-billing` stayed **up and healthy** and kept answering `psql` — with a pre-cutover snapshot. It never errored. Three agents (Atlas, Vega, Ember) independently "verified against prod" through it and got a **confidently wrong answer**; one escalated a P0 for fabricated data that never happened. Worse, the zombie backend on that box kept running its parsers and wrote **37 scouted assets into a DB nobody serves** — they never reached production. That stack is now stopped and the container renamed `spark-postgres-STALE-DO-NOT-USE`, so the old command fails loudly instead of lying.
+The failure this rule exists to prevent: after the Helsinki cutover (2026-07-09) the old `spark-postgres` on `host-a` stayed **up and healthy** and kept answering `psql` — with a pre-cutover snapshot. It never errored. Three agents (Atlas, Vega, Ember) independently "verified against prod" through it and got a **confidently wrong answer**; one escalated a P0 for fabricated data that never happened. Worse, the zombie backend on that box kept running its parsers and wrote **37 scouted assets into a DB nobody serves** — they never reached production. That stack is now stopped and the container renamed `spark-postgres-STALE-DO-NOT-USE`, so the old command fails loudly instead of lying.
 
 **The generalisable rule — after ANY host/DB cutover, the old box is the most dangerous thing in the estate:**
 - It answers. A stale-but-healthy datastore returns rows with **zero error signal**, and a green query reads exactly like a verified one. *Silent wrong data beats loud failure every time — for the attacker, and against you.*
@@ -197,7 +197,7 @@ The failure this rule exists to prevent: after the Helsinki cutover (2026-07-09)
 **Moved a Postgres host? Recreate the lead roles and repoint the env — they do NOT travel** (added 2026-07-21, Mesh `1d060c5f`):
 - **`pg_dump <db>` does not carry roles.** Roles live in `pg_authid`, a **cluster global**; only `pg_dumpall --globals-only` has them. The Helsinki migration moved the data and silently dropped `contenthub_read`, `evcbot_read`, `teamrelay_read` — and earlier `spark_read` (#890b9ba4) and `mesh_read` (#7f646f08). Five instances of one bug.
 - **Losing a read-only role is FAIL-OPEN, so nothing reports it.** Consumers fall back to the superuser and keep working; read-only silently degrades from a DB-enforced guarantee to agent discipline. Ask of every control: *if this vanished, would anything break?* If no, it needs its own check.
-- **Checklist on any host move:** (1) diff non-`pg_%` roles in `pg_authid` old vs new as an explicit acceptance criterion — green data checks say nothing about roles; (2) recreate missing roles with the **same grant shape** (`pg_read_all_data` vs scoped SELECT — see below); (3) repoint `~/.config/agents/secrets/lead-db-*.env` + add an ssh alias in the `mesh-host`/`spark-vm` style; (4) re-verify live through the env file, not by hand.
+- **Checklist on any host move:** (1) diff non-`pg_%` roles in `pg_authid` old vs new as an explicit acceptance criterion — green data checks say nothing about roles; (2) recreate missing roles with the **same grant shape** (`pg_read_all_data` vs scoped SELECT — see below); (3) repoint `~/.config/agents/secrets/lead-db-*.env` + add an ssh alias in the `mesh-host`/`spark-host` style; (4) re-verify live through the env file, not by hand.
 - **Grant shape is a security decision, not a detail.** `billing_read` is deliberately **scoped SELECT on the `billing` DB only**, NOT `pg_read_all_data` — its cluster also holds `blnk`/`hyperswitch_db`/`wallet_meta` (payments/PII), and `PUBLIC` has CONNECT on every DB by default. "Simplifying" it to `pg_read_all_data` on a future move would silently open financial reads.
 - **Prove read-only with `has_table_privilege()`, never error text** — a write probe can fail on type coercion *before* the permission check, which looks like enforcement but proves nothing.
 
@@ -257,7 +257,7 @@ Canonical good moves (each defined in its rule): `git fetch` + safe `pull --ff-o
 
 ## Edge-case index — when to read the reference (MANDATORY on match)
 
-Situational/incident rules live in `~/ClaudeCowork/bob/CLAUDE-workflow-reference.md` — they are AS BINDING as this file; read the matching section BEFORE acting when your situation matches:
+Situational/incident rules live in `~/ClaudeCowork/<ops-repo>/CLAUDE-workflow-reference.md` — they are AS BINDING as this file; read the matching section BEFORE acting when your situation matches:
 
 | Your situation | Read reference § |
 |---|---|
