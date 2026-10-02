@@ -129,6 +129,48 @@ class Gate(unittest.TestCase):
             self.assertEqual(gate(d), 1)
         self.assertNotIn("alpha-box", out.getvalue())
 
+    def test_nul_prefixed_file_is_still_scanned(self):
+        d = make_repo({"a.txt": "x\n"})
+        open(os.path.join(d, "b.bin"), "wb").write(b"\0\0\0 host " + ip(10, 2, 2, 2).encode() + b" up\n")
+        subprocess.run(["git", "-C", d, "add", "-A"], check=True)
+        self.assertEqual(gate(d), 1)
+
+    def test_short_name_in_a_nul_file_is_red(self):
+        d = make_repo({"a.txt": "x\n"})
+        open(os.path.join(d, "b.bin"), "wb").write(b"\0qq-mon\0")
+        subprocess.run(["git", "-C", d, "add", "-A"], check=True)
+        self.assertEqual(gate(d), 1)
+
+    def test_unreadable_tracked_file_fails_closed_without_its_name(self):
+        d = make_repo({"a.txt": "x\n", "alpha-box.txt": "y\n"})
+        os.chmod(os.path.join(d, "alpha-box.txt"), 0)
+        err = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(err):
+                rc = gate(d)
+        finally:
+            os.chmod(os.path.join(d, "alpha-box.txt"), 0o644)
+        if os.geteuid() != 0:
+            self.assertEqual(rc, 2)
+            self.assertNotIn("alpha-box", err.getvalue())
+
+    def test_tracked_file_missing_from_worktree_fails_closed(self):
+        d = make_repo({"a.txt": "x\n", "b.txt": "y\n"})
+        os.remove(os.path.join(d, "b.txt"))
+        self.assertEqual(gate(d), 2)
+
+    def test_tracked_file_replaced_by_directory_fails_closed(self):
+        d = make_repo({"a.txt": "x\n", "b.txt": "y\n"})
+        os.remove(os.path.join(d, "b.txt"))
+        os.mkdir(os.path.join(d, "b.txt"))
+        self.assertEqual(gate(d), 2)
+
+    def test_plain_binary_without_text_is_green(self):
+        d = make_repo({"a.txt": "x\n"})
+        open(os.path.join(d, "i.png"), "wb").write(b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\x01\x02\x03\x04" * 50)
+        subprocess.run(["git", "-C", d, "add", "-A"], check=True)
+        self.assertEqual(gate(d), 0)
+
     def test_flagged_path_is_not_restated(self):
         d = make_repo({"alpha-box/notes.md": "see " + ip(10, 6, 6, 6) + "\n"})
         out = io.StringIO()

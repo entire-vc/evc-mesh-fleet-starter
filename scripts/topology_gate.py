@@ -174,18 +174,32 @@ def tracked(root, rev):
 def read(root, rev, p):
     if rev:
         r = subprocess.run(["git", "-C", root, "show", "%s:%s" % (rev, p)], capture_output=True)
+        if r.returncode != 0:
+            raise ConfigError("a tracked blob is unreadable (fail-closed)")
         data = r.stdout
     else:
         full = os.path.join(root, p)
         if os.path.islink(full):
             # Same text `git show rev:path` yields: the link target, never the file behind it.
-            data = os.readlink(full).encode("utf-8", "surrogateescape")
+            try:
+                data = os.readlink(full).encode("utf-8", "surrogateescape")
+            except OSError:
+                raise ConfigError("a tracked symlink is unreadable (fail-closed)") from None
         elif not os.path.isfile(full):
-            return None
+            # Absent, a directory in place of a file, or not inspectable: skipping would let an
+            # altered checkout pass unscanned. (A submodule would land here too, loudly: none are used.)
+            raise ConfigError("a tracked file is missing or not inspectable (fail-closed)")
         else:
-            with open(full, "rb") as f:
-                data = f.read()
-    return None if b"\0" in data[:8192] else data.decode("utf-8", "replace")
+            try:
+                with open(full, "rb") as f:
+                    data = f.read()
+            except OSError:
+                raise ConfigError("a tracked file is unreadable (fail-closed)") from None
+    if b"\0" in data:
+        # Binary (or NUL-padded text): never skipped, or a leading NUL would hide a whole file.
+        # Scan the printable runs, so image bytes do not raise false hits.
+        return "\n".join(m.decode("ascii") for m in re.findall(rb"[\x20-\x7e]{2,}", data))
+    return data.decode("utf-8", "replace")
 
 
 def run(root, rev, names_path, allow_path, self_exempt=()):
