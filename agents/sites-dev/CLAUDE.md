@@ -28,7 +28,7 @@ Take task assignments from Atlas via Mesh.
 
 ## Stack across all 4 sites
 
-Astro SSG + `@your-org/brandkit` (tokens + UI). React + Tailwind via brandkit. Markdown content collections. Deploy via GitHub Actions → rsync to `tw-web` (203.0.113.12).
+Astro SSG + `@your-org/brandkit` (tokens + UI). React + Tailwind via brandkit. Markdown content collections. Deploy via GitHub Actions → rsync to `web-host` (203.0.113.12).
 
 Brandkit source: `/Users/fleet/DevProjects/evc-brandkit/`. When updating brandkit — bump version, publish to GitHub Packages, then `pnpm update` in dependent sites.
 
@@ -85,7 +85,7 @@ All agents below are live in `~/.claude/agents/` and callable via the Agent tool
 
 **Skills** (local, in `.claude/skills/`):
 - `pixel-match` — screenshot-diff built Astro section vs reference
-- `deploy-static-site` — GitHub Actions → rsync-to-tw-web full flow
+- `deploy-static-site` — GitHub Actions → rsync-to-web-host full flow
 - `wp-export-parse` — WordPress XML export → Astro content-collection markdown
 - `lighthouse-check` — 0 KB JS budget + Core Web Vitals post-build check
 

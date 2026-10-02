@@ -2,7 +2,7 @@
 
 This file is the **shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All working rules around Mesh tasks, state awareness, and communication with the operator live here. If your role has specifics — they belong in your own CLAUDE.md, but these rules take PRIORITY.
 
-Maintained by Orbit (coordinator) in `/Users/fleet/ClaudeCowork/bob/CLAUDE-task-workflow.md`. All agent workspaces use a symlink to this file plus a `@CLAUDE-task-workflow.md` import.
+Maintained by Orbit (coordinator) in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md`. All agent workspaces use a symlink to this file plus a `@CLAUDE-task-workflow.md` import.
 
 ---
 
