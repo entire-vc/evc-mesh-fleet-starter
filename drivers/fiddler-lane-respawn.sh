@@ -17,7 +17,7 @@ set -euo pipefail
 TMUX=/opt/homebrew/bin/tmux
 # FIDDLER_JSON override lets a second driver instance (e.g. the partner-Mesh
 # lane in fiddler-proto.json) reuse this same recovery path. Default unchanged.
-FIDDLER_JSON="${FIDDLER_JSON:-/Users/fleet/.config/fiddler/fiddler.json}"
+FIDDLER_JSON="${FIDDLER_JSON:-$HOME/.config/fiddler/fiddler.json}"
 SESSION="${1:?usage: fiddler-lane-respawn.sh <tmux_session> [model]}"
 MODEL="${2:-sonnet}"
 
@@ -34,7 +34,7 @@ for a in d.get('agents',[]):
 [ -n "${NAME:-}" ] || { echo "ERROR: no lane with tmux_session=$SESSION in fiddler.json"; exit 1; }
 [ -n "${WS:-}" ] || { echo "ERROR: lane $NAME has no workspace in fiddler.json"; exit 1; }
 
-STATE_DIR=/Users/fleet/.fiddler/sessions/$SESSION
+STATE_DIR=$HOME/.fiddler/sessions/$SESSION
 mkdir -p "$STATE_DIR"
 
 # OAuth token from keys.env (same source fiddler uses)
