@@ -35,8 +35,8 @@ cp -r agents/_shared ~/ClaudeCowork/<slug>/_shared           # the shared instru
 
 Edit `~/ClaudeCowork/<slug>/CLAUDE.md`: set the agent's name/identity, and make sure
 its `@_shared/CLAUDE-*.md` imports resolve (the `_shared` dir must sit next to the
-`CLAUDE.md`, or adjust the import paths). Replace every placeholder
-(`example.com`, `/Users/fleet`, routing tables) with your own.
+`CLAUDE.md`, or adjust the import paths). Replace every placeholder (for example, `example.com` or a workspace path)
+with your own values.
 
 ## 3. Configure the MCP registry (the Mesh MCP at minimum)
 
@@ -63,10 +63,11 @@ Render each agent's `.mcp.json` from the registry (or write `.mcp.json` by hand)
 ```bash
 python3 - <<'PY'
 import sys; sys.path.insert(0, "drivers")
+from pathlib import Path
 import mcp_registry as m
 reg, keys = m.load_registry(), m.load_keys()
 for slug, key in [("atlas","agk_..."), ("nova","agk_..."), ("kilo","agk_...")]:
-    m.write_for_agent(slug, f"/Users/YOU/ClaudeCowork/{slug}", key, reg, keys)
+    m.write_for_agent(slug, str(Path.home() / "ClaudeCowork" / slug), key, reg, keys)
 PY
 ```
 

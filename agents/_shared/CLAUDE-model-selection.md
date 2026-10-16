@@ -2,12 +2,11 @@
 
 This file is the **shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All working rules around Mesh tasks, state awareness, and communication with the operator live here. If your role has specifics — they belong in your own CLAUDE.md, but these rules take PRIORITY.
 
-Maintained by Orbit (coordinator) in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md`. All agent workspaces use a symlink to this file plus a `@CLAUDE-task-workflow.md` import.
+Maintained by Orbit (coordinator) in `${HOME}/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md`. All agent workspaces use a symlink to this file plus a `@CLAUDE-task-workflow.md` import.
 
 ---
 
-
-## Phase Discipline (added 2026-05-15, inspired by GSD `get-shit-done`)
+## Phase Discipline
 
 Any non-trivial task goes through **5 phases**. Each has a concrete deliverable and an owner. This eliminates «started coding without a spec», «merged without verify», «closed but doesn't work».
 
@@ -26,21 +25,21 @@ If stuck in any phase → invoke the `debugger` agent (root-cause analysis befor
 ### Rules
 
 1. **Crossing phases is explicit**. The lead (or executor) adds the label `phase:X` via `update_task` / `add_comment` on transition. The labels show where the task got stuck.
-2. **No skipping verify (PRE-HANDOFF VERIFY GATE, B3 #41e58997)**. Before moving any task to **`review` OR `done`** you MUST **spawn the cheap `verifier` subagent** (`Agent` tool, `subagent_type="verifier"`, model sonnet) against the task's acceptance criteria + proving commands/URLs — **do NOT self-verify in-context**. An independent fresh-context pass catches the confirmation-bias misses that cause review-bounces; it's also cheap and keeps the orchestrator session short. Paste the verifier's per-criterion VERDICT + overall SHIP/DO-NOT-SHIP/ROUTE as a task comment. DO-NOT-SHIP → fix and re-spawn the verifier; don't hand off. This is the **default path** — skipping is the exception and the exemption must be named in the handoff comment. **Exemptions:** trivial/no-op tasks (typo, label-only, pure-monitor / passive-wait) and tasks already verified by a verifier subagent this session. (Why: opus orchestrators Atlas/Orbit delegated to subagents ~1-5% and carried 14-18% rework in long single sessions; this gate makes the cheap delegation the default. See `docs/B3_subagent_verify_gate.md`.) `tester` is additionally mandatory for code changes.
+2. **No skipping verify (PRE-HANDOFF VERIFY GATE)**. Before moving any task to **`review` OR `done`** you MUST **spawn the cheap `verifier` subagent** (`Agent` tool, `subagent_type="verifier"`, model sonnet) against the task's acceptance criteria + proving commands/URLs — **do NOT self-verify in-context**. An independent fresh-context pass catches the confirmation-bias misses that cause review-bounces; it's also cheap and keeps the orchestrator session short. Paste the verifier's per-criterion VERDICT + overall SHIP/DO-NOT-SHIP/ROUTE as a task comment. DO-NOT-SHIP → fix and re-spawn the verifier; don't hand off. This is the **default path** — skipping is the exception and the exemption must be named in the handoff comment. **Exemptions:** trivial/no-op tasks (typo, label-only, pure-monitor / passive-wait) and tasks already verified by a verifier subagent this session. `tester` is additionally mandatory for code changes.
 
-   **2b. ROUTE ≠ review (A4-2 #b6be48ec, 2026-07-28).** The verifier has a third verdict. Before it may say SHIP it runs the two probes the reviewer will run anyway — **P1** `gh pr view <n> --repo <org>/<repo> --json state,mergedAt,baseRefName` (accepted only on `state==MERGED` + non-null `mergedAt` + base `main`/`master`) and **P2** the live probe named in the AC. If the work itself holds up but P1/P2 is outstanding and **you don't hold the rights to clear it**, the verdict is **ROUTE**, carrying `missing` / `probe` / `rights` / `next`.
+   **2b. ROUTE ≠ review.** The verifier has a third verdict. Before it may say SHIP it runs the two probes the reviewer will run anyway — **P1** `gh pr view <n> --repo <org>/<repo> --json state,mergedAt,baseRefName` (accepted only on `state==MERGED` + non-null `mergedAt` + base `main`/`master`) and **P2** the live probe named in the AC. If the work itself holds up but P1/P2 is outstanding and **you don't hold the rights to clear it**, the verdict is **ROUTE**, carrying `missing` / `probe` / `rights` / `next`.
 
    On ROUTE you do **not** `move_task(review)`. You:
    1. `move_task` → **`todo`** (not `review`, not `blocked`),
    2. `assign_task` → the agent named in `rights` (merge → Delta; deploy/release → the repo's named owner or CI per `CLAUDE-workflow` §1f). `rights: unknown` → assign to the task creator and say so,
    3. comment the verifier's ROUTE block verbatim, so the next holder sees the probe output rather than re-deriving it,
-   4. **`release_task` — drop your own checkout in the same action** (added 2026-08-04, #cee5c03f). Checkout auto-releases **only** on a terminal move (`done`/`review`/`cancelled`); ROUTE moves to `todo`, which is not terminal, so the lock survives the handoff. A foreign lock makes fiddler **drop the feed** — `fiddler.py:1082-1084` refuses any task whose `checked_out_by` is another agent, logging `skip feed — checked out by <id> — someone else holds the lock`, and it stays that way until the 2h TTL expires. Live instance: Vega performed steps 1-3 correctly, kept the lock, and Ember's lane silently skipped the card for two feed cycles (`02:35:56`, `03:06:15`). ROUTE means *by construction* "someone else does the rest" — that is exactly the moment your lock is pure cost.
+   4. **`release_task` — drop your own checkout in the same action.** A ROUTE handoff leaves work for another owner, so retaining your checkout can prevent that owner from receiving it.
 
    **Clearing someone else's stuck lock** (for whoever finds one): `release_task` from your own session fails — *«no checkout_token found»*, the token isn't yours. Take the explicit token from `get_task` and call the REST endpoint directly: `DELETE /api/v1/tasks/<id>/checkout` with body `{"checkout_token": "<token>"}` → 204. Reversible: if the holder is still working it, they simply check out again.
 
    **Verifying a handoff actually landed — presence in the queue is not feedability.** `agents/me/tasks?status_category=todo` under the recipient's key returns the card even while it is foreign-locked, because `checked_out_by` is not in that response. A green there is not evidence. Check **three** fields — `assignee`, status, and `checked_out_by is None` — or read the literal `feeding task #… → <agent>` line in `~/.fiddler/logs/fiddler.log`. (Companion to `CLAUDE-communication.md` §"How @-mentions wake": a mention does not wake a fiddler lane, so the card in `todo` is the whole delivery mechanism — and a lock disables it.)
 
-   Why: 19 of Grove's 24 review-bounces in 07-20→07-27 (79%) were *not* code defects — the work was correct and the outstanding step was merge/release/deploy/backfill, none of which the executor can perform (A4 #232fa45c, `scripts/agent-eval/rework-a4-20260727.md`). Handing that to `review` guarantees a bounce however good the work is. `review` then keeps one meaning: **"this is live, please accept."**
+   Why: correct code can still require an authorized merge, release, deployment or business decision. Route that remaining action to its owner instead of requesting another code review.
 
    **Honest limitation — do not misread the metric.** ROUTE does not reduce work. It moves the visibility of the delay out of the executor's rework lane and into the merge/release owner's backlog. That is the correct place for it, but the next weekly review must read the drop as a *transfer*, not as "the executor improved". Re-runnable measurement: `scripts/agent-eval/route-gate-metric.py`.
 3. **One phase per task**. If the task starts spreading across multiple phases with different owners — split into child tasks.
@@ -89,7 +88,7 @@ Vega move_task → done. STATE.md updated by Ember.
 
 ### Existing tasks without labels
 
-Old tasks (created before 2026-05-15) don't have phase labels — no need to retroactively. Apply only to new ones.
+Legacy tasks may lack phase labels; apply the phase protocol prospectively.
 
 ### When to skip phase discipline
 
@@ -100,7 +99,7 @@ Old tasks (created before 2026-05-15) don't have phase labels — no need to ret
 
 ---
 
-## Phase-aware Model Selection (mesh-dispatcher v5, 2026-05-15)
+## Phase-aware Model Selection
 
 `mesh-dispatcher` on Mac Mini automatically picks a Claude model on spawn based on task labels. This reduces token budget without quality loss — cognitive phases get opus, mechanical — sonnet.
 
@@ -133,7 +132,7 @@ On spawn the dispatcher logs `model override: X → Y (reason)` to `~/logs/mesh-
 
 ---
 
-## Parallelization via `task-splitter` (2026-05-15)
+## Parallelization via `task-splitter`
 
 Big tasks (`>1 deliverable, >1 agent could work concurrently`) are split by the **`task-splitter`** subagent into a DAG of subtasks with explicit `depends_on`. This is the second part of the GSD pattern (after Phase Discipline).
 
@@ -145,7 +144,7 @@ Big tasks (`>1 deliverable, >1 agent could work concurrently`) are split by the 
 - the operator/orchestrator explicitly says "split"
 - **Auto-threshold met** (see below) — triggered automatically, no manual decision needed
 
-### Auto-trigger threshold (MANDATORY — added 2026-05-26)
+### Auto-trigger threshold (MANDATORY)
 
 After checking out a task, **before any implementation**, check if the auto-threshold is met. This eliminates the manual «should I split?» decision.
 
@@ -180,7 +179,7 @@ verdict: do_not_split
   → 3. proceed with task as-is
 ```
 
-### Subtask ownership when an orchestrator decomposes (R3, 2026-06-11)
+### Subtask ownership when an orchestrator decomposes
 
 When a cross-project orchestrator (Atlas/Orbit) captains an epic, the exec subtasks must be **owned by the product LEAD**, not the orchestrator — otherwise every unit's review-handoff lands back on the captain (wrong attribution + review pile-up; this is what `[Mesh R1]` also fixes server-side). On `create_subtask`:
 - Set each subtask's `assignee_id` = the **product lead** (Comet=Argus, Nova/Kilo=Mesh, Vega/Ember=Spark, Delta/Grove=Obsidian, Pixel=sites) or the concrete builder — never the captain.

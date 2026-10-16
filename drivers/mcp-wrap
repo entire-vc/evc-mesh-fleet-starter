@@ -11,7 +11,7 @@
 #
 # Usage in mcp-registry/registry.yaml:
 #   <server>:
-#     command: "/Users/fleet/bin/mcp-wrap"
+#     command: "${HOME}/bin/mcp-wrap"
 #     args:    ["<real-binary>", "<real-arg1>", "..."]
 #     env:
 #       MCP_WRAP_NAME: "<friendly-name>"     # used in the log filename
