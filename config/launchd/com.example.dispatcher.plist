@@ -7,7 +7,7 @@
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/fleet/mesh-fleet-starter/drivers/mesh-dispatcher.py</string>
+    <string>/REPLACE_WITH_ABSOLUTE_HOME/mesh-fleet-starter/drivers/mesh-dispatcher.py</string>
   </array>
   <key>EnvironmentVariables</key>
   <dict>
@@ -16,7 +16,7 @@
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
-  <key>StandardOutPath</key><string>/Users/fleet/.dispatcher/logs/launchd.out.log</string>
-  <key>StandardErrorPath</key><string>/Users/fleet/.dispatcher/logs/launchd.err.log</string>
+  <key>StandardOutPath</key><string>/REPLACE_WITH_ABSOLUTE_HOME/.dispatcher/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>/REPLACE_WITH_ABSOLUTE_HOME/.dispatcher/logs/launchd.err.log</string>
 </dict>
 </plist>

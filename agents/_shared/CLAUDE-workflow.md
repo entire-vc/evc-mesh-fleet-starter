@@ -1,12 +1,12 @@
 # Task Workflow — Common Rules for All Mesh Agents
 
-**Shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All Mesh-task, state-awareness, and the operator-communication rules live here; role-specifics go in your own CLAUDE.md but these take PRIORITY. Maintained by Orbit in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md` (symlinked + `@`-imported into every agent workspace).
+**Shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All Mesh-task, state-awareness, and the operator-communication rules live here; role-specifics go in your own CLAUDE.md but these take PRIORITY. Maintained by Orbit in `${HOME}/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md` (symlinked + `@`-imported into every agent workspace).
 
 > Full incident write-ups, worked examples, and enforcement-script internals for every rule → `CLAUDE-workflow-reference.md` (read on demand). This core carries the operative directives.
 
 ---
 
-## 0. Execution pacing — ASAP by default (CRITICAL, added 2026-05-21)
+## 0. Execution pacing — ASAP by default
 
 **Rule for all agents and Orbit**: everything happens **as fast as possible, no delays**. Only exception: **pre-scheduled tasks** (cron / recurring / scheduled deploy windows / explicit deferred-until-date).
 
@@ -52,7 +52,7 @@ Applies to Mesh comments, TG reports, sprint/ADR/spec/subtask docs, Captain plan
 
 ---
 
-## 1b. Deploy Discipline — migration BEFORE code (CRITICAL — prod-down, added 2026-06-03)
+## 1b. Deploy Discipline — migration BEFORE code
 
 **Hard rule — the migration is applied BEFORE (or atomically with) the code that depends on it. NEVER ship code ahead of its migration.**
 
@@ -65,21 +65,21 @@ Applies to Mesh comments, TG reports, sprint/ADR/spec/subtask docs, Captain plan
 
 Applies to ALL DB-backed services. Per-service CI `migrate`-before-`deploy` gates → `bd3e71b8`; until one lands, ordering is the agent's responsibility on every manual deploy.
 
-### Merging an `your-org` PR → `~/bin/gh-merge`, NOT `gh pr merge` (SSO-401, added 2026-06-11)
+### Merging an `your-org` PR → `~/bin/gh-merge`, NOT `gh pr merge`
 
-**Hard rule — merge org PRs via the `~/bin/gh-merge` wrapper, never the `gh pr merge` subcommand.** On the `your-org` org `gh pr merge <n> --squash` returns **HTTP 401 «Requires authentication»** even when `gh` is logged in and reads (`pr view/diff/list`) work — the subcommand's GraphQL mutation hits an SSO-gated step. This silently jams the whole queue: agents build, move the task to `review`, and wait for a merge that never lands (Spark stalled ~19h / Mesh 2 days, 2026-06-11). Use the wrapper around the REST PUT (not SSO-gated):
+**Use the configured, reviewed merge wrapper when the organization requires it.** It must preserve authorization, draft and human-hold checks. If the normal CLI cannot authenticate, stop and use the approved route; do not bypass the gate.
 
 ```bash
 ~/bin/gh-merge <n> your-org/<repo>     # → OK merged: True sha: …
 ```
 
-**Use the wrapper, not the bare `gh api PUT`** (added 2026-07-29, `#c97be8b2`). `gh-merge` is that same REST PUT plus the one thing the raw command cannot do: it reads the PR's labels and **refuses** to merge anything carrying a `HOLD_LABELS` label (`hold`, `no-automerge`, `do-not-merge`, `wip`, `blocked`, `needs-review`, …) or marked draft — the same list `mesh-merge-train` honours, imported from `scripts/fleet_gate_labels.py` rather than copied. It **fails closed**: if the PR can't be read, or the label module can't be imported, it refuses rather than merging unchecked.
+**Use the wrapper, not the bare `gh api PUT`**. `gh-merge` is that same REST PUT plus the one thing the raw command cannot do: it reads the PR's labels and **refuses** to merge anything carrying a `HOLD_LABELS` label (`hold`, `no-automerge`, `do-not-merge`, `wip`, `blocked`, `needs-review`, …) or marked draft — the same list `mesh-merge-train` honours, imported from `scripts/fleet_gate_labels.py` rather than copied. It **fails closed**: if the PR can't be read, or the label module can't be imported, it refuses rather than merging unchecked.
 
-Why this replaced the bare command: `hold` was documented in §1q as *the* machine-readable way to say "do not merge yet", but it only ever stopped the train. The manual path — the one this section told everyone to use — read no labels at all. On 2026-07-29 two security PRs (`#428`, `#432`) reached prod carrying `hold`, one of them **7 minutes** after the label went on. A label that guards one of two merge paths is worse than none, because it gets believed and then stops being watched.
+Both manual and automatic merge paths must enforce the same human-hold and draft gates. A documented hold is ineffective if one merge path bypasses it.
 
 Deliberate override exists and is loud: `~/bin/gh-merge <n> <repo> --force-hold "<reason>"` prints the reason and proceeds. `--check-only` runs the gate without merging. `~/bin/gh-merge` is a **symlink** to `<ops-repo>/scripts/fleet-tools/gh-merge`, so the prod copy and the tracked copy cannot drift (the failure mode that left the June merge-train gate dead in prod while the repo showed it fixed).
 
-Before a **batch** merge, apply §1b ordering: inspect each PR for migrations and merge in version order; **two open PRs must never carry the same migration version** (collision → migrate-gate skips one or fails closed) — renumber before merging, and never merge a lower version *after* a higher one already landed. Verified working (Atlas, Spark unjam; Orbit `#23582ede`).
+Before a **batch** merge, apply §1b ordering: inspect each PR for migrations and merge in version order; **two open PRs must never carry the same migration version** (collision → migrate-gate skips one or fails closed) — renumber before merging, and never merge a lower version *after* a higher one already landed.
 
 ---
 
@@ -87,7 +87,7 @@ Before a **batch** merge, apply §1b ordering: inspect each PR for migrations an
 
 **Hard rule — wherever technically possible, an acceptance criterion is a COMMAND the executor runs itself and reads the result of.** Executor-verified, the operators E2E the final sign-off — not «done pending the operator». Forms (→ §8 template): `curl … -w '%{http_code}'` / `/api/version` SHA == on-disk SHA (`[[learnings_mesh_binary_swapped_not_restarted]]`); headless Playwright smoke on the Mac Mini node (`nodes invoke … system.run`); `psql -c` (pairs §1b); `go test -run X` / `pytest -k …`. The closing comment **quotes the command + output**; «Done» without a pasted runnable result = anti-pattern (§6).
 
-### Deep-verify — CONTENT, not status code (CRITICAL — prod-incident class, added 2026-06-10)
+### Deep-verify — CONTENT, not status code
 
 **HTTP 200 proves NOTHING about the feature.** SPA/SSR pages return a 200 shell with a 500-error block inside; APIs return 200 with `{"error": …}`. A bare `curl -w '%{http_code}'` is NOT verification — that exact pattern shipped broken pages (Comet/Argus: page 200, inner block 500). Every deploy/page/API verify MUST assert on CONTENT:
 1. **Positive marker present** — a string/element only the WORKING feature renders (a data value, feature-specific id), not boilerplate.
@@ -97,9 +97,9 @@ Helper — service-only probe: `~/bin/verify-page <URL> --expect '<marker>' [--r
 **Full pre-done gate** (PR merged + CI green + service probe): `~/bin/mesh-done-gate.py [--pr <PR-URL>] [--service-url <URL> --expect '<marker>'] [--skip-ci]` — exit 0 = SHIP, exit 1 = DO-NOT-SHIP; paste the `╔══ MESH DONE GATE ══` block into the closing comment. Use for ANY task that has a PR and/or a deployed service. The verifier subagent re-runs it independently before approving move→done — author paste ≠ certifier.
 **Mesh write pre-flight** (before any move_task/remember/assign call → kills 422): `~/bin/mesh-write-shim.py preflight --task <id> [--status <intent>] [--key <k>] [--expires <e>]` — resolves intent→board-slug, short-id→UUID, colon-key→kebab, validates expires; exit 0 = safe to call MCP, exit 1 = DO-NOT-CALL+reason. Also: individual checks `slug`, `uuid`, `key`, `expires`, `gate`.
 
-### PR Definition-of-Done — «PR opened» is NOT done (CRITICAL — abandoned-PR stalls, added 2026-06-11)
+### PR Definition-of-Done — «PR opened» is NOT done
 
-A task with a PR is **NOT done until the PR is merged + deployed + verified**. Moving the task to `review` on «PR opened» and walking away = the #1 stall (21 evc-mesh PRs rotted: dirty / red-CI / unmerged). Rules:
+A task with a PR is **NOT done until the PR is merged + deployed + verified**. Moving the task to `review` on «PR opened» and walking away = the #1 stall. Rules:
 1. **Don't leave a PR red or dirty.** Before `move_task → review`: CI green + no conflicts (rebased on main). A red-CI / dirty PR is unfinished work — keep driving it, don't park it.
 2. **Drive your own last mile:** merge → confirm deploy (CI auto-deploy or manual) → live-verify (deep-verify above) → close to `done`. Don't assume someone else merges your green PR.
 3. **Merge command (your-org org):** `gh pr merge` returns **HTTP 401 (SSO-gated GraphQL)** even when logged in. Use `~/bin/gh-merge <n> your-org/<repo>` — the REST PUT plus the `hold`/draft gate, fail-closed (§1b). The fleet auto-merge bot (`~/bin/mesh-merge-train`) drains clean+green PRs periodically, but YOU still own deploy+verify+close.
@@ -107,7 +107,7 @@ A task with a PR is **NOT done until the PR is merged + deployed + verified**. M
 
 ### §1q Merge train — what stops it, and how to say "do not merge" machine-readably
 
-If you run an auto-merge bot ("merge train") that drains clean+green PRs, these rules keep it from shipping work that a human still needs to sign off. The incident that taught each: a money/critical PR where the builder wrote "don't merge, needs independent review" **in the task** — the train merged it 38 minutes later and CI shipped it to prod, because the train reads labels, not comment prose.
+If you run an auto-merge bot, these rules keep it from shipping work that still needs human sign-off. Enforce a machine-readable gate in every merge path; task prose alone is not enforcement.
 
 **Rule 1 — one source of truth for gate labels.** All label sets live in ONE module (e.g. `fleet_gate_labels.py`: `SENSITIVE_LABELS`, `HUMAN_VERIFY_LABELS`, `GATED_LABELS`, `HOLD_LABELS`). Every gate imports from it; duplicating the literal is banned (a drift-guard test fails if a second copy appears). A duplicated list diverges silently and you only find out after something shipped.
 
@@ -136,7 +136,7 @@ grep -c "merge-gate" <merge-bot-log>            # 0 for all time = the gate neve
 python3 <merge-train> --test                    # run the gate's own case suite (incl. money-without-human-verify)
 diff <prod-copy> <git-copy>                      # prod copy ≠ git copy = "fixed" on paper only
 ```
-Once, the prod copy and the git copy diverged for weeks: editing the repo changed nothing in prod. **Edit both, or make prod a symlink to the tracked file.**
+Verify that the deployed copy matches the reviewed tracked version; editing a repository alone does not prove deployment.
 
 **Symlink deploy vs copy deploy have DIFFERENT liveness checks — and `diff` is only valid for the copy case.** If prod is a **symlink** to the tracked source (the way to guarantee prod == git for a big mutable script), then `diff -q link target` is a **tautology — it compares a file with itself and can never fail.** The load-bearing checks are the other three:
 ```bash
@@ -148,11 +148,11 @@ The general rule: ask **"can this line ever return NO?"** before you trust it as
 
 The same "can it fail?" test applies to freshness checks: `stat -f %m <symlink>` on macOS reads the *symlink's* frozen mtime — use `stat -Lf %m` to follow it, or the "up-to-date, no-op" it prints is identical to what a healthy gate prints over a clean tree.
 
-**Verifying host-local work.** A verify driver that only knows two probes — "is the PR merged?" and "does the live endpoint respond?" — cannot confirm a task whose deliverable is a **file or state on the fleet host** with no PR and no remote endpoint (measured: 0/14 such tasks ever confirmed, though 13/14 were genuinely done). "Couldn't confirm" meant "work is done, the probe is blind." So: classify by **probe outcome, not description heuristics** — if no PR link exists anywhere in the task blob AND no remotely-reachable URL (the task's own URL and RFC1918/loopback don't count), it's host-local. Let the executor opt in by naming concrete paths (`~/...`, `scripts/*.py`) or an `artifact:host-local` label; the parking comment then states a verdict about **the probe, not the work**.
+**Verifying host-local work.** A verify driver that only knows two probes — "is the PR merged?" and "does the live endpoint respond?" — cannot confirm a task whose deliverable is a **file or state on the fleet host** with no PR and no remote endpoint. "Couldn't confirm" meant "work is done, the probe is blind." So: classify by **probe outcome, not description heuristics** — if no PR link exists anywhere in the task blob AND no remotely-reachable URL (the task's own URL and RFC1918/loopback don't count), it's host-local. Let the executor opt in by naming concrete paths (`~/...`, `scripts/*.py`) or an `artifact:host-local` label; the parking comment then states a verdict about **the probe, not the work**.
 
-### Post-deploy verification IS part of done — «merged»/«CI green» ≠ done (CRITICAL — false-done class, added 2026-06-18, the operator)
+### Post-deploy verification IS part of done — «merged»/«CI green» ≠ done
 
-For ANY task that ships to a running service (UI / API / deploy / integration), **done requires a run against the LIVE DEPLOYED service**, not just merged + CI-green. «Merged» = code is in main; «CI passed» = it builds — **neither proves the feature works in prod.** The closing acceptance run is the deep-verify (above) against the deployed URL; for **user-facing** work that means an **authenticated browser scenario** — Casdoor login → exercise the real flow → zero `console.error`/`pageerror`/5xx → assert the DATA changed (the `e2e-harness` + `e2e-scenarios/*.md` convention, epic #d0682c39).
+For ANY task that ships to a running service (UI / API / deploy / integration), **done requires a run against the LIVE DEPLOYED service**, not just merged + CI-green. «Merged» = code is in main; «CI passed» = it builds — **neither proves the feature works in prod.** The closing acceptance run is the deep-verify (above) against the deployed URL; for **user-facing** work that means an **authenticated browser scenario** — Casdoor login → exercise the real flow → zero `console.error`/`pageerror`/5xx → assert the DATA changed (the `e2e-harness` + `e2e-scenarios/*.md` convention).
 - **Enforced, author ≠ certifier:** for user-facing tasks the `review-verify-driver` independently RUNS the relevant authed browser scenario before allowing `review → done` (F2). Your own «tests pass» / pasted log is NOT sufficient — only a fresh independent run counts. A post-deploy smoke (`@smoke` Playwright, logged-in) is the literal «deploy is done» gate.
 - **Scope (the operators nuance):** a typical low-risk dev **subtask** with no deploy surface (`delegation_level=auto`) legitimately closes on its own merge + CI + unit/`go test`/`pytest` evidence — this rule targets anything that **deploys or integrates**. When unsure whether a change is user-observable in prod, treat it as ship-to-service and post-deploy-verify before `done`.
 
@@ -162,7 +162,7 @@ Inherently human only: visual taste, subjective copy, a real-money/irreversible 
 
 ### `review` IS the hand-off — nothing is parked there (CRITICAL)
 
-**Moving a task to `review` = "I'm done and I request independent verification."** That is the status's only meaning. A `review-verify-driver` should spawn an independent verifier on **any** agent task sitting in `review` past a threshold (e.g. 2h) — no stamps, markers, or magic phrases. (We once required one of four magic phrases in the text; measured, **0 of 27** otherwise-ready tasks had the stamp and the queue stalled for days. Opt-in-by-guessing-a-phrase was removed.)
+**Moving a task to `review` = "I'm done and I request independent verification."** That is the status's only meaning. A `review-verify-driver` should spawn an independent verifier on **any** agent task sitting in `review` past a threshold (e.g. 2h) — no stamps, markers, or magic phrases..
 
 What follows:
 1. **You don't need to write anything to be seen.** An ordinary human comment ("PR#114 merged, CI green") is enough — the status suffices. An explicit `Verify: <agent>` is still valid and useful (it addresses a specific domain reviewer) but is no longer the condition for visibility.
@@ -172,9 +172,9 @@ What follows:
 
 ---
 
-## 1d. Prod host/domain/path → verify against servers.md BEFORE hardcoding (CRITICAL — wrong-model stall, added 2026-06-04)
+## 1d. Prod host/domain/path → verify against servers.md BEFORE hardcoding
 
-**`servers.md`** (`~/Obsidian/Rogozhin/Devops/docs/servers.md`) is the source of truth for host identity — every prod host ↔ IP ↔ public domain(s) ↔ on-host layout ↔ service names.
+**`servers.md`** (`<server-inventory-path>`) is the source of truth for host identity — every prod host ↔ IP ↔ public domain(s) ↔ on-host layout ↔ service names.
 
 **Hard rule — before hardcoding ANY of these into code/config/task/deploy-script/memory-drawer, look it up in `servers.md` first:** a **public domain/subdomain** (`*.example.com`/`*.example.com`/`*.svc.example.com`) — which host serves it and for **what** (web-publish vs WebSocket vs API = different vhosts on the same box); a **prod hostname/IP**; an **on-host path** or **service/container name**.
 
@@ -182,11 +182,11 @@ Fact **not in `servers.md`, or contradicts it** → do **not** guess. Either (a)
 
 **Pre-merge guard:** `scripts/check-prod-hosts.sh` flags new hardcoded `*.example.com`/`*.example.com` refs in the diff before merge (modes → reference). New host → **add it to `servers.md`** same change. A host-dependent AC quotes the verified value (§1c).
 
-### 1d-bis. A decommissioned host does not go quiet — it LIES (added 2026-07-12, Mesh `e69e21cb`)
+### 1d-bis. Verify authoritative hosts after a cutover
 
-**Spark:** verify **only** via the live API `https://app.example.com/api/v1/...`, or — when SQL is genuinely required — `source ~/.config/agents/vega-prod.env && ssh "$SPARK_DB_HOST" "docker exec $SPARK_DB_CONTAINER psql -U $SPARK_DB_USER -d $SPARK_DB_NAME …"` (`$SPARK_DB_USER` = read-only `spark_read`, DB-enforced — INSERT/UPDATE/DELETE/DDL fail by design). **NEVER `host-a`. NEVER hardcode `-U spark`** — that's the DB superuser; a copy-pasted `-U spark` example is one keystroke from an unaudited prod write (task #27a07d6b).
+Verify the configured live API first. When SQL is required, load the approved read-only environment and use its host/container/database variables. Never substitute a remembered endpoint for current server documentation.
 
-The failure this rule exists to prevent: after the Helsinki cutover (2026-07-09) the old `spark-postgres` on `host-a` stayed **up and healthy** and kept answering `psql` — with a pre-cutover snapshot. It never errored. Three agents (Atlas, Vega, Ember) independently "verified against prod" through it and got a **confidently wrong answer**; one escalated a P0 for fabricated data that never happened. Worse, the zombie backend on that box kept running its parsers and wrote **37 scouted assets into a DB nobody serves** — they never reached production. That stack is now stopped and the container renamed `spark-postgres-STALE-DO-NOT-USE`, so the old command fails loudly instead of lying.
+A retired datastore can remain healthy while returning stale rows. Verify the authoritative endpoint and data freshness after a host cutover; a successful query alone does not establish either.
 
 **The generalisable rule — after ANY host/DB cutover, the old box is the most dangerous thing in the estate:**
 - It answers. A stale-but-healthy datastore returns rows with **zero error signal**, and a green query reads exactly like a verified one. *Silent wrong data beats loud failure every time — for the attacker, and against you.*
@@ -194,16 +194,16 @@ The failure this rule exists to prevent: after the Helsinki cutover (2026-07-09)
 - **Sweep every place that names the old host** in the same change — agent `CLAUDE.md`s, skills, access matrices, Grafana datasources, auto-memory. A decommissioned host that still lives in an instruction file will be queried again; docs are the fleet's muscle memory.
 - Pin freshness to something that moves: `max(updated_at)` / a row written in the last hour. "The query returned rows" is not evidence the host is live.
 
-**Moved a Postgres host? Recreate the lead roles and repoint the env — they do NOT travel** (added 2026-07-21, Mesh `1d060c5f`):
-- **`pg_dump <db>` does not carry roles.** Roles live in `pg_authid`, a **cluster global**; only `pg_dumpall --globals-only` has them. The Helsinki migration moved the data and silently dropped `contenthub_read`, `evcbot_read`, `teamrelay_read` — and earlier `spark_read` (#890b9ba4) and `mesh_read` (#7f646f08). Five instances of one bug.
-- **Losing a read-only role is FAIL-OPEN, so nothing reports it.** Consumers fall back to the superuser and keep working; read-only silently degrades from a DB-enforced guarantee to agent discipline. Ask of every control: *if this vanished, would anything break?* If no, it needs its own check.
-- **Checklist on any host move:** (1) diff non-`pg_%` roles in `pg_authid` old vs new as an explicit acceptance criterion — green data checks say nothing about roles; (2) recreate missing roles with the **same grant shape** (`pg_read_all_data` vs scoped SELECT — see below); (3) repoint `~/.config/agents/secrets/lead-db-*.env` + add an ssh alias in the `mesh-host`/`spark-host` style; (4) re-verify live through the env file, not by hand.
-- **Grant shape is a security decision, not a detail.** `billing_read` is deliberately **scoped SELECT on the `billing` DB only**, NOT `pg_read_all_data` — its cluster also holds `blnk`/`hyperswitch_db`/`wallet_meta` (payments/PII), and `PUBLIC` has CONNECT on every DB by default. "Simplifying" it to `pg_read_all_data` on a future move would silently open financial reads.
-- **Prove read-only with `has_table_privilege()`, never error text** — a write probe can fail on type coercion *before* the permission check, which looks like enforcement but proves nothing.
+**Moved a Postgres host? Recreate read-only roles and update consumers.**
+- `pg_dump <db>` does not carry cluster-global roles; inventory roles and grants separately.
+- Verify read-only enforcement explicitly rather than permitting a silent superuser fallback.
+- Compare required roles and grant shapes, update the approved private environment configuration, and recheck through that configuration.
+- Grant only the required database/schema access; cluster-wide grants can expose unrelated databases.
+- Prove read-only permissions with `has_table_privilege()`, not an error that could arise before authorization.
 
 ---
 
-## 1h. Self-Verify-with-Rollback — the autonomy gate (act vs escalate) (CRITICAL, added 2026-06-04)
+## 1h. Self-Verify-with-Rollback — the autonomy gate
 
 Act autonomously on anything **reversible** or **rule-governed** having captured a rollback first; escalate ONLY for the narrow set genuinely irreversible AND outside the rules. **Reversibility is the license to act — not the operators approval.**
 
@@ -280,23 +280,19 @@ Situational/incident rules live in `~/ClaudeCowork/<ops-repo>/CLAUDE-workflow-re
 | Recurring/audit agent: where to route findings | §8 + Acceptance template |
 | Subagent orchestration patterns (schemas/SoM/captain) | §9, §10, §11 |
 
-
-
 ## §1k Visual tasks — mandatory screenshot comparison
 
 Any task that changes UI (layout, redesign, components, landing pages):
 1. **Do NOT move to review/done without screenshots.** Minimum: desktop 1440 + mobile 393, light (+dark if supported), attached to the task as artifacts.
-2. **A screenshot is a one-liner, not a quest:** wrap your headless browser in a `page-shot <url> [out.png] [--dark|--mobile]` helper so there are no excuses (three redesigns once failed because taking a screenshot required 20 minutes of CORS/proxy/chromium debugging).
+2. **A screenshot is a one-liner, not a quest:** wrap your headless browser in a `page-shot <url> [out.png] [--dark|--mobile]` helper so there are no excuses.
 3. **Compare against the reference:** if the task has a design reference (mockup, artifact, link), place the screenshot NEXT to it and list the discrepancies explicitly. "Looks close" is not a verdict; a list of discrepancies is.
 4. A UI/redesign PR does NOT merge without the visual gate (screenshots + human sign-off) — auto-merge is disallowed for it.
-
 
 ## §1m Recall before work
 
 Before working a task (after checkout, before the first action) — a **mandatory recall** against your memory store: `recall(query='<3-5 task keywords>')`. If your memory is graph-backed it returns not just keyword hits but the past decisions / incidents / gotchas *related* to this work. It's cheap (one call) and removes "derive context from scratch" and drift.
 - Do NOT block or loop on an empty result — an empty layer is fine, just proceed.
 - The point is to raise read-frequency: a fleet that writes memory 2× more than it reads it is re-deriving what it already knows.
-
 
 ## §1o Mocking convention — only at TRUE external boundaries
 
@@ -327,7 +323,6 @@ A task touching a **user-facing feature** (label `ui`/`frontend`, product = web,
 4. **"Tests passed" from the code's author is NOT proof.** Author ≠ certifier; only a fresh independent run counts. The closing comment quotes the scenario name + run output.
 
 Relationship: §1k (screenshots) covers layout; §1n covers behavior/function. Both are mandatory on user-facing work.
-
 
 ## §1r Standing fleet rules
 
@@ -368,7 +363,7 @@ Before ANY status report and before ANY disposition (`move_task` to backlog/done
 - **Do NOT switch branches in a working copy that lives on a server.** The prod copy sits on its own branch. Need a different version → your own worktree or a built image, never `git checkout` in the live directory: build from a feature branch, then return to `main`, and the edits vanish with no error and no warning.
 - **Updating someone else's / a partner instance — first check for un-pushed work there:** `git status --short` (uncommitted), `git log --oneline @{u}..` (un-pushed), `git reflog -20` (traces of others' builds). Found something → stop, first `git push origin HEAD:refs/heads/rescue/<description>`.
 - **A partner instance running your product** is the same code, one `main`, two deployments: branch from `origin/main` → a normal PR → both instances. Deploying to the partner ahead of the merge is fine (their users are waiting) — that's a deployment decision, it does not cancel the push.
-- **Why:** an agent once fixed a partner instance following an instruction "branch from their deployed commit, build, deploy" — which had no "push" step. It would have lost 11 branches (~22 commits) on the fleet host plus 22 files / 790 lines uncommitted right in the server's working copy, including a feature with a migration. Two sides were clobbering: one built past GitHub, the other re-deployed the same host from `main` three times. No one was careless — with that scheme the loss was a matter of time.
+- **Why:** unpushed changes can be lost or overwritten by another deployment. Preserve and publish work before changing a shared instance.
 
 ### F. Product ownership
 

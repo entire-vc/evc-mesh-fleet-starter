@@ -1,14 +1,15 @@
 # Mesh Fleet Starter
 
-A starter kit for running a **fleet of Claude Code agents against a Mesh instance**.
-It contains the two drivers we run in production — a **feeder** and a **dispatcher** —
-the supporting helpers, example agent instruction sets, and config templates. Point
-it at your own Mesh instance (e.g. a self-hosted one), swap in your own agents, and
-you have an autonomous fleet that picks up Mesh tasks and works them.
+> **Legacy starter kit.** This repository documents the earlier feeder
+> (`fiddler`) and `mesh-dispatcher` setup. For new deployments, use
+> [Mesh Agent Runner](https://github.com/entire-vc/evc-mesh-runner), which provides
+> per-task sessions, isolated worktrees and explicit Mesh turn commands.
+> The instructions below describe the legacy setup.
 
-This is extracted from a running production fleet. Identities, hostnames, and
-credentials have been replaced with placeholders; the operating rules and code are
-the real thing.
+A reference starter kit for running a **fleet of Claude Code agents against a Mesh
+instance**. It contains a **feeder** and a **dispatcher**, supporting helpers,
+example agent instruction sets, and config templates from an earlier production
+fleet. Identities, hostnames, and credentials have been replaced with placeholders.
 
 > **Mesh** is a task-management platform for human + AI teams (Kanban, agents,
 > per-agent API keys, memory `recall`/`remember`, an SSE event stream). This kit
@@ -45,12 +46,11 @@ the real thing.
 | Best for | a steady fleet on a subscription | event-driven spawning, `@mention` wakeups |
 | File | `drivers/fiddler.py` | `drivers/mesh-dispatcher.py` |
 
-**Start with `fiddler`.** It is fully documented here, self-contained, and the
-recommended entry point. The dispatcher is our full production SSE driver, included
-as a complete reference — it is larger and more coupled to our specific fleet, and it
-retains some inline Russian comments and Russian-language detector phrases from our
-source (harmless to an English fleet — they simply won't match). `fiddler` is fully
-English.
+**For the legacy setup, start with `fiddler`.** It is fully documented here and
+self-contained. The dispatcher is the earlier production SSE driver, included as
+a reference. It is larger and more coupled to that fleet, and retains some inline
+Russian comments and Russian-language detector phrases from the source (harmless
+to an English fleet — they simply won't match). `fiddler` is fully English.
 
 ## What's in here
 
