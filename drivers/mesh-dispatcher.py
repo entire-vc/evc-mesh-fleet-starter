@@ -213,8 +213,8 @@ ENV = {
 # the operators Telegram chat; Orbit's bridge (vc.entire.orbit-telegram, KeepAlive)
 # is the always-on coordinator channel that drains this outbox to him.
 PAVEL_CHAT_ID = "000000000"
-RIKER_OUTBOX = "/Users/fleet/ClaudeCowork/bob/telegram-outbox.jsonl"
-TG_REPLY = "/Users/fleet/bin/tg-reply"
+RIKER_OUTBOX = os.path.expanduser("~/ClaudeCowork/bob/telegram-outbox.jsonl")
+TG_REPLY = os.path.expanduser("~/bin/tg-reply")
 
 
 def log(agent: str, msg: str):
@@ -565,7 +565,7 @@ PAUSE_GLOBAL_FILE = PAUSE_DIR / "PAUSE_ALL"
 EXEMPT_AGENTS = {"Aux1", "Aux2", "Aux2", "aux2_bot"}
 TG_NAG_CHAT_ID = os.environ.get("TG_NAG_CHAT_ID", "000000000")  # the operator/Orbit default
 TG_NAG_OUTBOX = os.environ.get("TG_NAG_OUTBOX",
-    "/Users/fleet/ClaudeCowork/bob/telegram-outbox.jsonl")
+    os.path.expanduser("~/ClaudeCowork/bob/telegram-outbox.jsonl"))
 _STALE_LOCK = threading.Lock()
 _STALE_LAST: dict = {}                 # task_id -> monotonic ts of last re-dispatch
 _STALE_COUNTS: dict = {}               # task_id -> int — stale-redispatch fire count
@@ -5814,83 +5814,19 @@ def fetch_review_tasks(agent_key: str, api_url: str, agent_name: str = ""):
 
 
 def _pavel_ask_state(t: dict, agent_key: str, api_url: str) -> str:
-    """TRI-STATE: is this review task awaiting PAVEL? "ask" / "clear" / "unknown".
+    """Return whether a review task awaits an operator: ask, clear, or unknown.
 
-    FAIL-CLOSED (task 5815feef, 2026-07-30). The predecessor returned a plain
-    bool, and False meant BOTH "the ask was positively withdrawn" and "I could
-    not see an ask". `run_review_sweep` read every False as *self-healed* — it
-    dropped the card into `close_bucket` AND pruned its re-verify gate state, so
-    the escalation the driver had already promised in the thread never happened
-    and never retried (one-shot: the sweep runs every 6h and the 4h hold is
-    decided at a single sample point).
+    "ask" means an authoritative human-gate flag, a structural gate label, or
+    a live non-negated marker anywhere in the thread without a newer human
+    reply. Prose cannot override an authoritative gate flag or label.
 
-    THE GATE WAS NOT INERT — it mis-CLEARED. Recounted 2026-07-30 03:51 MSK
-    (task 23ed94a2) over `~/logs/mesh-dispatcher.log`, matching the strings this
-    function's callers emit under the `[escalation-reverify]` tag; the tag's
-    first line is 2026-06-13, so "all-time" starts there, not at the file head:
+    "clear" requires a successful read showing no marker, a negated marker,
+    an explicit later withdrawal, or an operator reply after the latest marker.
+    "unknown" means the comment read failed; callers must not treat it as clear.
 
-        window              pinged   escalated   escalated (unique cards)
-        07-01…07-30           42        29                26
-        all-time 06-13…07-30  66        46                43
-        06-01…06-30           24        17                17
-
-    Counted instead on the launchd stdout sink `~/logs/mesh-dispatcher-stdout.log`
-    the July pair is 39/26. The 3-event delta is not drift: it is three manual
-    `run_review_sweep` invocations against #b2e6578a at 03:05:45 / 03:06:40 /
-    03:07:01 while this fix was being probed — `log()` writes them to the file
-    sink, launchd's capture never sees them. DAEMON-ONLY July is 39 pinged /
-    26 escalated. Re-derive before citing: the log grows, and a prior revision
-    of this docstring asserted "52 pinged / 41 escalated", which reproduces on
-    no window of either file.
-
-    What the gate actually got wrong: 9 `pavel-ask cleared` events on 8 cards,
-    all in July (June: zero), identical in both sinks. That log line only fires
-    when gate state EXISTED, so every one aborted a live hold. Two of the nine
-    are proven false clears — after the 03:02:57 restart onto the fixed
-    predicate the very next sweep re-detected and escalated them:
-      #b2e6578a  cleared 07-22 05:41:50 -> escalated 07-30 03:12:53 at 195.5h
-                 since its ping (money-path, Stripe)
-      #6008f68d  cleared 07-29 16:06:11 -> escalated 07-30 03:12:53 at 35.1h
-    #f784de0e was listed here as a third and is NOT one: re-detected 03:05:08,
-    it cleared AGAIN at 03:12:54 under the fail-closed predicate, i.e. on
-    positive evidence — a legitimate self-heal. #b811a2d7 (cleared 07-28) was
-    re-detected 03:05:06 with its 4h window still open at measurement time:
-    undetermined, deliberately not counted either way. (The earlier "219h / 48h
-    / 24h" ages were also wrong; 195.5h and 35.1h are what the escalation lines
-    state, and 24h was f784de0e's time-to-clear, not a suppression.)
-
-    Both false-cleared cards still carried server `human_gate=true` AND a
-    genuine `❓ Blocking @operator` marker in the thread; the marker simply sat 5
-    comments back, outside the 3-comment window the old scan looked at. Two of
-    those three slots are consumed by the gate's own machinery:
-    `_post_reverify_request` posts a comment (excluded from ask detection since
-    #84ab54fd, but it still occupies a slot) and that comment ASKS the owner to
-    reply with fresh evidence — so a card whose owner did exactly what the ping
-    demanded is *guaranteed* to have its marker evicted. The remediation
-    instruction was what made the gate drop the case.
-
-    Discrimination is exact (probe 2026-07-30, all five cards human_gate=true):
-    marker at #2/#3 from newest -> True -> escalated + TG-delivered — #27e83fd9,
-    #cdeb6fc5, #9a816160, each logged `ask SURVIVED 6.0h`; marker at #5 -> False
-    -> suppressed (#b2e6578a, #6008f68d). Distance from the newest comment was
-    the ONLY variable that differed.
-
-    So: absence of a visible marker is not evidence the ask is gone.
-      "ask"     — structured signal (server human_gate / structural label) or a
-                  live non-negated marker anywhere in the thread, with no newer
-                  human reply.
-      "clear"   — POSITIVE evidence: no marker at all, negated in the marker
-                  comment, a later owner comment that withdraws it, or the operator
-                  replied after the newest marker (his answer releases it —
-                  2026-05-25 bb233804 «я ж ответил там в комментах»).
-      "unknown" — the comment read failed. Caller must NOT treat this as clear.
-
-    Scanning the whole thread removes the accidental withdrawal-by-scrolling the
-    3-comment window used to provide, so a LATER withdrawal comment now has to be
-    honoured explicitly — otherwise an ask becomes un-withdrawable and nags
-    forever (the E1 #8594d87d failure mode). That prose path only runs for cards
-    WITHOUT the server flag and without a structural label: when the
-    authoritative signal says "gated", prose cannot override it.
+    Scan the whole returned thread rather than a short recent-comment window:
+    a marker moving out of that window is not evidence of withdrawal. Honour
+    explicit later withdrawals so a prose-only ask remains withdrawable.
     """
     # Tier 0: the server's own sticky flag (evc-mesh PR #258, stamped by
     # enforceBlockingTriage on any ❓Blocking comment). Scroll-proof and free —

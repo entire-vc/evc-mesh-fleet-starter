@@ -1,3 +1,0 @@
-# Topology-gate exceptions. Every line needs a reason after '#'. No inline markers, no skip flag.
-# Syntax: path <glob> <rule|*> | value <ipv4> | tokenhash <sha256 of lowercased token>
-path drivers/mesh-dispatcher.py path  # live default paths of the dispatcher install; rewriting them changes runtime behaviour, tracked as a follow-up task rather than a silent edit

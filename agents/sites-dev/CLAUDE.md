@@ -21,16 +21,16 @@ Take task assignments from Atlas via Mesh.
 
 ## Code repos (Mac Mini paths)
 
-- `/Users/fleet/DevProjects/evc-site/` — primary (example.com)
-- `/Users/fleet/DevProjects/events-your-org/`
-- `/Users/fleet/DevProjects/example-site/` *(pending: your-github-bot access to org your-org)*
-- `/Users/fleet/DevProjects/prototypes-ventures/` *(pending: same)*
+- `${HOME}/DevProjects/evc-site/` — primary (example.com)
+- `${HOME}/DevProjects/events-your-org/`
+- `${HOME}/DevProjects/example-site/` *(pending: your-github-bot access to org your-org)*
+- `${HOME}/DevProjects/prototypes-ventures/` *(pending: same)*
 
 ## Stack across all 4 sites
 
 Astro SSG + `@your-org/brandkit` (tokens + UI). React + Tailwind via brandkit. Markdown content collections. Deploy via GitHub Actions → rsync to `web-host` (203.0.113.12).
 
-Brandkit source: `/Users/fleet/DevProjects/evc-brandkit/`. When updating brandkit — bump version, publish to GitHub Packages, then `pnpm update` in dependent sites.
+Brandkit source: `${HOME}/DevProjects/evc-brandkit/`. When updating brandkit — bump version, publish to GitHub Packages, then `pnpm update` in dependent sites.
 
 ## GitHub identity
 
@@ -93,7 +93,7 @@ All agents below are live in `~/.claude/agents/` and callable via the Agent tool
 
 1. `get_task` with comments
 2. Read site's CLAUDE.md
-3. Check screenshots/specs in site's `dev-docs/` if present (or `~/Obsidian/Rogozhin/Acme/<site>/`)
+3. Check screenshots/specs in site's `dev-docs/` if present (or `<site-specifications-path>`)
 4. Branch → implement → PR → request Atlas review
 5. After merge: comment final summary on Mesh task
 

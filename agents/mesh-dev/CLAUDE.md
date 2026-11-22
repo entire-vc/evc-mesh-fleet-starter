@@ -18,12 +18,12 @@ Implementation work in **evc-mesh** (Go API + React frontend + NATS + PostgreSQL
 **Always use YOUR isolated worktrees** — never the shared main clones (`/DevProjects/evc-mesh/` etc).
 These are git-linked worktrees on branch `agents/kilo` tracking `origin/main`:
 
-- `/Users/fleet/DevProjects/evc-mesh-kilo/`
-- `/Users/fleet/DevProjects/evc-mesh-mcp-kilo/`
-- `/Users/fleet/DevProjects/evc-mesh-openclaw-skill-kilo/`
+- `${HOME}/DevProjects/evc-mesh-kilo/`
+- `${HOME}/DevProjects/evc-mesh-mcp-kilo/`
+- `${HOME}/DevProjects/evc-mesh-openclaw-skill-kilo/`
 
 When task involves code → `cd` into the relevant worktree, work there.
-For feature branches: `git -C /Users/fleet/DevProjects/evc-mesh-kilo worktree add /tmp/... -b <branch> origin/main`
+For feature branches: `git -C ${HOME}/DevProjects/evc-mesh-kilo worktree add /tmp/... -b <branch> origin/main`
 
 ## GitHub identity
 
@@ -84,11 +84,8 @@ Per CLAUDE-orbit.md dual-write policy — save important learnings to **both**:
 - `gh auth status` — should show authenticated as `your-github-bot`
 - `git config --get user.name` — should be `Nova Stoun`
 - `mcp__evc-mesh__get_my_tasks` — verify Mesh MCP responds
-- `git -C /Users/fleet/DevProjects/evc-mesh-kilo status` — should show `On branch agents/kilo`
+- `git -C ${HOME}/DevProjects/evc-mesh-kilo status` — should show `On branch agents/kilo`
 ---
 
-> ### ⚠️ MEMORY UPDATE 2026-07-04 — mempalace dual-write RETIRED
-> Ignore any "dual-write to mempalace" / `mempalace_add_drawer` instruction ABOVE.
-> **Canonical memory = Mesh `remember(key, content, scope, tags)`** (+ Claude Code auto-memory as the local cache).
-> Do **NOT** write to mempalace, and — as of **Phase 4a (2026-07-12, task #cd53e9aa)** — do **NOT** read it either. Use Mesh `recall` for ALL memory reads (wake-up, "what did we decide", episodic). The mempalace runtime is being retired after a verified zero-read window; `mempalace_search` still technically resolves but MUST NOT be called by any agent. Dispatcher prefetch is off (`DISPATCHER_MEMPALACE_PREFETCH=0`).
-> Rationale: benchmark 2026-07-04 confirmed Mesh recall is solid (64% LongMemEval-S); mempalace was redundant and the dual-write was the root of the "wrote-but-didn't-read" R:W problem. See `<ops-repo>/docs/PLAN_Mempalace_Retirement_2026-07.md`.
+> ### Memory storage
+> Use Mesh `remember(key, content, scope, tags)` for durable shared memory and `recall` for reads. Use local auto-memory only as a session cache. Do not dual-write to a retired memory store or rely on its availability.

@@ -2966,7 +2966,7 @@ def cmd_doctor(cfg: dict) -> int:
             "alert_chat_id": None,
             "agents": [{
                 "name": "test1", "tmux_session": "agent-test1",
-                "workspace": "/Users/fleet/ClaudeCowork/test1",
+                "workspace": os.path.expanduser("~/ClaudeCowork/test1"),
                 "mesh_agent_key": "tr_agent_...", "project_id": None, "enabled": True,
             }],
         }

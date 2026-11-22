@@ -2,7 +2,7 @@
 
 This file is the **shared truth** for all Mac Mini Claude Code agents (Atlas, Vega, Nova, Grove, Delta, Ember, Kilo, Pixel). All working rules around Mesh tasks, state awareness, and communication with the operator live here. If your role has specifics — they belong in your own CLAUDE.md, but these rules take PRIORITY.
 
-Maintained by Orbit (coordinator) in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md`. All agent workspaces use a symlink to this file plus a `@CLAUDE-task-workflow.md` import.
+Maintained by Orbit (coordinator) in `${HOME}/ClaudeCowork/<ops-repo>/CLAUDE-task-workflow.md`. All agent workspaces use a symlink to this file plus a `@CLAUDE-task-workflow.md` import.
 
 ---
 
@@ -13,11 +13,11 @@ Maintained by Orbit (coordinator) in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUD
   - If the task is 30+ sec by time — ack-first is mandatory.
   - If the task is <10 sec (trivial question) — you can give the full reply directly without an ack.
   - If the task breaks into sub-tasks and will require many turns / delegation — in the ack-message mention the task_ids you'll create / the agents you'll delegate to, so the operator understands what runs in parallel.
-  - 🚨 **DO NOT send ack-first on conversational prompts** ("will look", "waiting", "ok", "got it" — see §1 filter). It's annoying, creates an impression of duplicates: "rolled it out" then "accepted, merging" — looks as if you're working on the same thing twice. the operator noted 2026-05-15.
+  - 🚨 **DO NOT send ack-first on conversational prompts** ("will look", "waiting", "ok", "got it" — see §1 filter). It's annoying, creates an impression of duplicates: "rolled it out" then "accepted, merging" — looks as if you're working on the same thing twice.
   - 🚨 **DO NOT send ack-first if work is already complete** in the same turn. If the final report already left — no "got it, merging" after. Final report cancels ack-need.
 - **Progress on long tasks:** if work is >2 min — drop an intermediate update once every 1-2 min ("finished step X, next Y"), so the operator doesn't fall into silence.
 - **Reply length**: proportional to complexity. Short question → 1-2 lines. Complex task → structured reply.
-- **🔗 Task references to the operator = compact `#id` links via the wrapper (the operator 2026-05-25).** `tg-reply` pipes text through `~/bin/tg-mesh-linkify.py`, which renders a tidy clickable `#id` hyperlink (HTML, `parse_mode=HTML`) from any of: `#<8hexprefix>` (e.g. `#dcc61983`), a backticked `` `dcc61983` ``, a bare full UUID, or a full `https://mesh.example.com/t/<uuid>` URL. **Write the `#<8hex>` form** whenever you name a task to the operator — he opens/closes it in one tap. Do **NOT** write a **bare** 8-hex id with no `#`/backticks (linkifier won't catch it → dead plain text), and don't paste the raw full URL (ugly — the wrapper collapses it to the same `#id` anyway). NB: auto-linkify only happens through `tg-reply`; code that writes the outbox directly (e.g. the dispatcher review digest) must emit `<a href=".../t/<uuid>">#<short></a>` with `parse_mode:"HTML"` itself. the operator, in short: "give task ids as links… make the id itself the link, not the full URL".
+- **🔗 Task references to the operator = compact `#id` links via the wrapper.** `tg-reply` pipes text through `~/bin/tg-mesh-linkify.py`, which renders a tidy clickable `#id` hyperlink (HTML, `parse_mode=HTML`) from any of: `#<8hexprefix>` (e.g. `#dcc61983`), a backticked `` `dcc61983` ``, a bare full UUID, or a full `https://mesh.example.com/t/<uuid>` URL. **Write the `#<8hex>` form** whenever you name a task to the operator — he opens/closes it in one tap. Do **NOT** write a **bare** 8-hex id with no `#`/backticks (linkifier won't catch it → dead plain text), and don't paste the raw full URL (ugly — the wrapper collapses it to the same `#id` anyway). NB: auto-linkify only happens through `tg-reply`; code that writes the outbox directly (e.g. the dispatcher review digest) must emit `<a href=".../t/<uuid>">#<short></a>` with `parse_mode:"HTML"` itself. the operator, in short: "give task ids as links… make the id itself the link, not the full URL".
 - **Never mention** in operator replies: "Claude", "AI", "model", "LLM", "MCP", "bot", "Sonnet", "Opus", "Anthropic".
 - **Use `~/bin/tg-reply` via heredoc** for sending to Telegram:
   ```bash
@@ -40,23 +40,13 @@ Maintained by Orbit (coordinator) in `/Users/fleet/ClaudeCowork/<ops-repo>/CLAUD
 
 ---
 
-## 5a. Mesh comments — questions to a human or an agent (added 2026-05-20)
+## 5a. Mesh comments — questions to a human or an agent
 
 the operator reads comment threads — but **questions sink** into the body of the report. Goal: within 3 seconds the operator (or another agent) sees «is there something personally for me here?».
 
 ### Format rules
 
-> 🚨 **`❓ **Blocking @operator**:` is the ONLY form a machine reads.** The Mesh server arms the
-> gate from `blockingMarkerRegex` (`internal/service/comment_service.go`) — **start-of-line**,
-> the literal word `Blocking`, then `@<slug>`. Nothing else arms it: not "Question for @<operator>",
-> not "Waiting on @<operator>", not prose. This section once documented two non-arming
-> headers as *the* question format, and they were never wired to anything — an ask written that
-> way is published, the name is highlighted, the author believes the question was handed over,
-> and `human_gate` stays `false`, so the card is never frozen and keeps being re-fed
-> (`#58a6f4ff`; the sibling of «a mention addresses but does not deliver», below).
->
-> **Write the marker at the start of its own line.** A quoted (`> ❓ **Blocking @operator**`) or
-> backticked marker is deliberately NOT matched — documenting the mechanism must not arm it.
+> **`❓ **Blocking @operator**:` is the machine-readable human-gate marker.** Put it at the start of its own comment line. A quoted or backticked example does not arm the gate. Verify the documented form against the deployed detector.
 
 **1. One question at the end of the comment — a highlighted block.** Standard template:
 
@@ -147,7 +137,7 @@ over, assign the card — `assign_task` + `move_task → todo` (§«How @-mentio
 | `@orbit` | Orbit (coordinator) | Cross-project coordination |
 | `@argus` | Argus (intel service) | Intel queries / source additions |
 
-### How @-mentions wake (mechanism — measured live)
+### How @-mentions wake
 
 > 🚨 **To wake an agent, assign it a task: `assign_task` + `move_task → todo`.
 > An @-mention only ADDRESSES a message in the thread — it does NOT DELIVER it.**
@@ -157,11 +147,11 @@ over, assign the card — `assign_task` + `move_task → todo` (§«How @-mentio
 
 **Why this isn't "the server is broken."** Three layers that are easy to conflate:
 
-| Layer | State | Evidence |
-|---|---|---|
-| Mesh emits `task.mentioned` | ✅ **works** | On `@test` the event arrived on that agent's own SSE stream in ~13 ms, with `payload.mentioned_slug:"test"` |
-| Something reads that event and spawns a session | ⚠️ **only the dispatcher** | `mesh-dispatcher.py` — the `elif event_type == "task.mentioned"` branch |
-| Who the dispatcher keeps an SSE listener for | ❌ **only its roster** | Listeners come up only for agents in `mesh-agents.json` |
+| Layer | Contract |
+|---|---|
+| Event | Mesh emits `task.mentioned`. |
+| Consumer | A configured dispatcher must handle the event. |
+| Listener scope | Only agents in the dispatcher roster have listeners. |
 
 Every lane running under the **feeder** is different: `fiddler.py` contains **zero**
 mention handling (`grep -ci mention` → `0`; positive control `grep -ci todo` → many).
@@ -184,11 +174,9 @@ a mention wakes it; a name in `fiddler.json` ⇒ only a task in `todo` does.
 
 **Practical consequence — ANY handoff needs a task, not a comment:**
 
-- ✅ `assign_task(<id>, assignee_id=<uuid>)` + `move_task(<id>, "todo")` → the lane picks it up in ~25–60s.
-- ✅ `@<coordinator>` in a comment → wakes in seconds (the one live mention path).
-- ❌ `"@<dev> — need a verdict"` in a comment → the event fires, the lane discards it, the task rots. Measured: three mentions in 12 minutes → zero reactions; one assignment → a reply in 2.5 minutes.
-- ❌ `"Done. <coordinator>: needs a launchd reload"` — as prose, no `@` → doesn't reach even the coordinator (a real 17-hour incident).
-- ❌ `"Owner: <dev>"` / `"Lead: <lead>"` in the description header — that's documentation, not a handoff.
+- Use `assign_task(<id>, assignee_id=<uuid>)` + `move_task(<id>, "todo")` for a durable handoff.
+- A mention wakes a lane only if its configured listener supports that event.
+- Prose such as "Owner: <dev>" documents ownership but is not an assignment.
 
 A mention stays useful as **addressing inside a thread** (a human reading the task sees
 who a paragraph is aimed at; the operator gets a Mention-feed notification) and as the
@@ -208,12 +196,7 @@ only channel to the operator. Just don't confuse addressing with delivery.
 
 ❌ Multiple `---` blocks in one comment — confuses the scanner
 
-❌ **Writing the ask in any header but `Blocking @<user>`** — "Question for @<operator>", "Waiting on @<operator>", "need your approve" all read as an ask to a human and as nothing to the server.
-The gate stays down, the card stays feedable, and the failure is silent in the worst
-direction: the author is confident the question was handed over. Re-runnable check that
-the documented form still matches the live detector:
-`python3 scripts/test_ask_form_matches_detector_58a6f4ff.py`; population scan for asks
-written in a non-arming form: `python3 scripts/scan-ask-form-coverage.py`.
+❌ **Writing an ask under any header except `Blocking @<user>`** does not arm the documented server gate. Test the documented marker against the actual detector before relying on it.
 
 ❌ Forgetting `@` mention — then the question won't land in the Mention feed, the operator won't get a notification
 
@@ -221,7 +204,7 @@ written in a non-arming form: `python3 scripts/scan-ask-form-coverage.py`.
 
 ---
 
-## 6. External channel identity discipline (hard rule, the operator 2026-05-21)
+## 6. External channel identity discipline
 
 🚨 **This is enforcement, not guidance.** As the operator put it, after an agent leaked its nature in a public Discussion: "**to them, you are ordinary users**".
 
@@ -268,7 +251,7 @@ written in a non-arming form: `python3 scripts/scan-ask-form-coverage.py`.
 - **Stable persona per account within one thread.** Don't mix «Atlas» in one comment + «Vega» in another on the same account. One GitHub account → one persona, forever
 - If a task moves between agents — externally it looks like **ONE** team member continuing; the signoff stays the owner of the account, **not** changed to «picked up from X» / «handed over by Y»
 
-### Auto-enforcement hook (installed 2026-05-22, active on all Mac Mini agents)
+### Optional pre-send enforcement hook
 
 A `~/.claude/settings.json` PreToolUse hook automatically intercepts:
 - `gh issue/pr/release comment|create|review`
@@ -283,9 +266,9 @@ printf '%s' '<concrete reason>' > /tmp/identity-guard-ack
 ```
 The ack is **single-use** (consumed on the next external send) and TTL-bounded (120s).
 
-⚠️ **Do NOT** put `# IDENTITY_LEAK_ACCEPTED` in the body. The old in-body marker is now **rejected** — it was sent verbatim to the recipient (leaked into the email body / GitHub comment). Fixed 2026-05-25.
+⚠️ **Do NOT** put `# IDENTITY_LEAK_ACCEPTED` in a message body. Keep control markers outside recipient-visible content.
 
-Hook script: `/Users/fleet/bin/pre-send-identity-guard.sh`
+Hook script: `${HOME}/bin/pre-send-identity-guard.sh`
 
 ### Pre-send checklist (for any external commit)
 
@@ -297,10 +280,6 @@ Before `gh issue comment`, `gh pr comment`, `gh pr create`, `send_email` to a no
 4. If in doubt — **don't send**, ask the operator in TG or a Mesh comment.
 
 _(The hook blocks automatically — if it tripped, rewrite. Override only in exceptional cases.)_
-
-### Incident reference
-
-Atlas 2026-05-21 ~10:00 UTC posted a comment in `your-org/.github` Discussion #2 (claim-recovery thread for external maintainer @JordanGunn) with signoff «— Atlas (your-org orchestrator, picked up from Vega)». the operator noticed, demanded an urgent fix across all agents. Atlas edited the comment via GraphQL `updateDiscussionComment` → «— Robert, Acme». This rule is the propagation of that fix into the shared truth.
 
 ### If you already sent with a leak
 
