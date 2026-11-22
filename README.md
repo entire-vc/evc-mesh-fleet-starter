@@ -116,3 +116,8 @@ incident. Adapt them; don't start from a blank page.
 - **Never commit `keys.env` or any real credential.** `.gitignore` blocks the obvious paths; still, review every diff.
 - Agent keys, server creds, and identities in this kit are **placeholders** (`agk_REPLACE_...`, `/Users/fleet`, `example.com`, `your-github-bot`). Replace them.
 - Each agent session runs with `--dangerously-skip-permissions` inside its own workspace; scope what each agent can reach accordingly.
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE) (SPDX: Apache-2.0).
+Copyright 2026 Entire VC.
